@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Maison — Concierge Injection at Your Door</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=DM+Sans:wght@300;400;500;600&display=swap"
+  rel="stylesheet"
+/>
+<style>
+  :root {
+    --cream: #faf6ef;
+    --cream-2: #f3ece0;
+    --ink: #1e1a16;
+    --ink-soft: #4a423a;
+    --line: #d8cdb8;
+    --line-soft: #e8dfc9;
+    --clay: #b06b58;
+    --clay-deep: #8e503f;
+    --sage: #7a8470;
+    --serif: "Fraunces", Georgia, serif;
+    --sans: "DM Sans", -apple-system, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--cream); color: var(--ink); }
+  body {
+    font-family: var(--sans);
+    font-weight: 400;
+    line-height: 1.6;
+    min-height: 100vh;
+    padding: 0 24px 80px;
+    background-image:
+      radial-gradient(at 12% 8%, rgba(176, 107, 88, 0.07) 0px, transparent 50%),
+      radial-gradient(at 88% 92%, rgba(122, 132, 112, 0.06) 0px, transparent 50%);
+  }
+
+  .wrap { max-width: 720px; margin: 0 auto; }
+
+  /* ─── Header ───────────────────────────── */
+  header {
+    padding: 64px 0 56px;
+    text-align: center;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 56px;
+  }
+  .brand {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: clamp(48px, 8vw, 76px);
+    letter-spacing: -0.02em;
+    line-height: 1;
+    font-variation-settings: "opsz" 144;
+  }
+  .brand em {
+    font-style: italic;
+    color: var(--clay);
+  }
+  .tagline {
+    font-family: var(--serif);
+    font-style: italic;
+    font-weight: 300;
+    color: var(--ink-soft);
+    font-size: 18px;
+    margin-top: 16px;
+    letter-spacing: 0.01em;
+  }
+  .eyebrow {
+    font-family: var(--sans);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--clay-deep);
+    margin-bottom: 16px;
+    font-weight: 500;
+  }
+
+  /* ─── Step sections ─────────────────────── */
+  section {
+    padding: 32px 0;
+    border-bottom: 1px solid var(--line-soft);
+    animation: fade-up 0.6s ease-out backwards;
+  }
+  section:last-of-type { border-bottom: none; }
+  section.s1 { animation-delay: 0.1s; }
+  section.s2 { animation-delay: 0.2s; }
+  section.s3 { animation-delay: 0.3s; }
+  section.s4 { animation-delay: 0.4s; }
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .step-num {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 28px;
+    color: var(--clay);
+    font-weight: 400;
+  }
+  .step-title {
+    font-family: var(--serif);
+    font-size: 32px;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    margin: 4px 0 24px;
+    line-height: 1.2;
+  }
+  .step-sub {
+    color: var(--ink-soft);
+    font-size: 15px;
+    margin-bottom: 20px;
+    max-width: 480px;
+  }
+
+  /* ─── Inputs ───────────────────────────── */
+  .field { margin-bottom: 20px; }
+  label {
+    display: block;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+  input[type="text"], input[type="email"], input[type="tel"] {
+    width: 100%;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--line);
+    padding: 12px 0;
+    font-family: var(--sans);
+    font-size: 17px;
+    color: var(--ink);
+    transition: border-color 0.2s;
+  }
+  input:focus {
+    outline: none;
+    border-bottom-color: var(--clay);
+  }
+  input::placeholder { color: #b8ad96; }
+
+  /* ─── Procedure cards ──────────────────── */
+  .procedures {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin-top: 20px;
+  }
+  .proc-card {
+    border: 1px solid var(--line);
+    background: var(--cream);
+    padding: 20px 18px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+    font-family: inherit;
+    color: inherit;
+  }
+  .proc-card:hover {
+    border-color: var(--clay);
+    background: var(--cream-2);
+  }
+  .proc-card.selected {
+    border-color: var(--ink);
+    background: var(--ink);
+    color: var(--cream);
+  }
+  .proc-card .pname {
+    font-family: var(--serif);
+    font-size: 19px;
+    font-weight: 400;
+    margin-bottom: 4px;
+  }
+  .proc-card .pmeta {
+    font-size: 13px;
+    opacity: 0.7;
+  }
+
+  /* ─── Slot display ─────────────────────── */
+  .slots-status {
+    color: var(--ink-soft);
+    font-style: italic;
+    font-family: var(--serif);
+    padding: 8px 0;
+  }
+  .day-group { margin-bottom: 28px; }
+  .day-label {
+    font-family: var(--serif);
+    font-size: 22px;
+    font-weight: 400;
+    margin-bottom: 6px;
+  }
+  .day-date {
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin-bottom: 16px;
+  }
+  .slot-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px;
+  }
+  .slot-chip {
+    background: var(--cream);
+    border: 1px solid var(--line);
+    padding: 14px 12px;
+    cursor: pointer;
+    transition: all 0.18s;
+    font-family: inherit;
+    color: inherit;
+    text-align: left;
+  }
+  .slot-chip:hover {
+    border-color: var(--clay);
+    background: var(--cream-2);
+    transform: translateY(-1px);
+  }
+  .slot-chip.selected {
+    border-color: var(--ink);
+    background: var(--ink);
+    color: var(--cream);
+  }
+  .slot-time {
+    font-family: var(--serif);
+    font-size: 19px;
+    font-weight: 400;
+    margin-bottom: 2px;
+  }
+  .slot-injector {
+    font-size: 12px;
+    opacity: 0.75;
+  }
+
+  /* ─── Action button ────────────────────── */
+  .btn-primary {
+    background: var(--ink);
+    color: var(--cream);
+    border: none;
+    padding: 18px 36px;
+    font-family: var(--sans);
+    font-size: 13px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.2s;
+    font-weight: 500;
+    margin-top: 16px;
+  }
+  .btn-primary:hover { background: var(--clay-deep); }
+  .btn-primary:disabled {
+    background: #c8bda6;
+    cursor: not-allowed;
+  }
+
+  /* ─── Confirmation ─────────────────────── */
+  .confirm {
+    text-align: center;
+    padding: 60px 20px;
+  }
+  .confirm-mark {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 80px;
+    color: var(--clay);
+    line-height: 1;
+    margin-bottom: 24px;
+  }
+  .confirm-title {
+    font-family: var(--serif);
+    font-size: 36px;
+    margin-bottom: 12px;
+    font-weight: 400;
+  }
+  .confirm-sub {
+    color: var(--ink-soft);
+    max-width: 440px;
+    margin: 0 auto;
+    line-height: 1.7;
+  }
+  .confirm-details {
+    margin-top: 32px;
+    padding: 24px;
+    background: var(--cream-2);
+    text-align: left;
+    max-width: 440px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .confirm-detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    font-size: 14px;
+  }
+  .confirm-detail-row .key {
+    color: var(--ink-soft);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 11px;
+  }
+
+  .hidden { display: none !important; }
+
+  /* ─── Responsive ───────────────────────── */
+  @media (max-width: 480px) {
+    body { padding: 0 18px 60px; }
+    header { padding: 40px 0 32px; }
+    section { padding: 24px 0; }
+    .step-title { font-size: 26px; }
+    .procedures { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1 class="brand">Maison<em>.</em></h1>
+    <p class="tagline">Concierge cosmetic injection, at your door.</p>
+  </header>
+
+  <!-- Step 1: Address -->
+  <section class="s1">
+    <div class="eyebrow">Step 01</div>
+    <h2 class="step-title">Where are we coming to?</h2>
+    <p class="step-sub">
+      Enter your home address — we'll calculate which of our injectors can reach you,
+      and when. Earlier slots become available the closer you are to existing appointments.
+    </p>
+    <div class="field">
+      <label for="address">Service Address</label>
+      <input
+        type="text"
+        id="address"
+        placeholder="1100 Wilson Blvd, Arlington, VA 22209"
+        autocomplete="street-address"
+      />
+    </div>
+  </section>
+
+  <!-- Step 2: Procedure -->
+  <section class="s2">
+    <div class="eyebrow">Step 02</div>
+    <h2 class="step-title">What are we doing today?</h2>
+    <div class="procedures" id="procedures">
+      <button class="proc-card" data-procedure="botox">
+        <div class="pname">Botox</div>
+        <div class="pmeta">30 minutes</div>
+      </button>
+      <button class="proc-card" data-procedure="lip_filler">
+        <div class="pname">Lip Filler</div>
+        <div class="pmeta">45 minutes</div>
+      </button>
+      <button class="proc-card" data-procedure="cheek_filler">
+        <div class="pname">Cheek Filler</div>
+        <div class="pmeta">60 minutes</div>
+      </button>
+      <button class="proc-card" data-procedure="jawline_filler">
+        <div class="pname">Jawline Filler</div>
+        <div class="pmeta">60 minutes</div>
+      </button>
+      <button class="proc-card" data-procedure="consultation">
+        <div class="pname">Consultation</div>
+        <div class="pmeta">30 minutes</div>
+      </button>
+    </div>
+  </section>
+
+  <!-- Step 3: Slots -->
+  <section class="s3 hidden" id="slots-section">
+    <div class="eyebrow">Step 03</div>
+    <h2 class="step-title">Pick your moment.</h2>
+    <p class="step-sub">
+      These times reflect when our injectors can actually arrive at your door,
+      based on their schedule and traffic. The closer you are to a previous
+      client, the sooner you can be seen.
+    </p>
+    <div id="slots-container">
+      <p class="slots-status">Calculating availability for your address…</p>
+    </div>
+  </section>
+
+  <!-- Step 4: Contact -->
+  <section class="s4 hidden" id="contact-section">
+    <div class="eyebrow">Step 04</div>
+    <h2 class="step-title">Tell us a little about you.</h2>
+    <div class="field">
+      <label for="name">Full Name</label>
+      <input type="text" id="name" placeholder="Alex Morgan" />
+    </div>
+    <div class="field">
+      <label for="email">Email</label>
+      <input type="email" id="email" placeholder="alex@example.com" />
+    </div>
+    <div class="field">
+      <label for="phone">Phone</label>
+      <input type="tel" id="phone" placeholder="(555) 123-4567" />
+    </div>
+    <button class="btn-primary" id="submit-btn" disabled>Request Appointment</button>
+  </section>
+
+  <!-- Confirmation (replaces everything) -->
+  <div class="confirm hidden" id="confirmation">
+    <div class="confirm-mark">✦</div>
+    <h2 class="confirm-title">You're on the calendar.</h2>
+    <p class="confirm-sub">
+      Your request has been received. A member of our team will text you shortly
+      to confirm the details and answer any questions.
+    </p>
+    <div class="confirm-details" id="confirm-details"></div>
+  </div>
+
+</div>
+
+<script>
+  // ─── State ──────────────────────────────────────────────
+  const state = {
+    address: "",
+    procedure: null,
+    procedureLabel: "",
+    slot: null,        // { start_time, injector_id, injector_name, travel_minutes }
+  };
+
+  // ─── Element refs ───────────────────────────────────────
+  const $address = document.getElementById("address");
+  const $procedures = document.getElementById("procedures");
+  const $slotsSection = document.getElementById("slots-section");
+  const $slotsContainer = document.getElementById("slots-container");
+  const $contactSection = document.getElementById("contact-section");
+  const $submitBtn = document.getElementById("submit-btn");
+  const $name = document.getElementById("name");
+  const $email = document.getElementById("email");
+  const $phone = document.getElementById("phone");
+
+  // ─── Address change ─────────────────────────────────────
+  let addressTimer;
+  $address.addEventListener("input", e => {
+    state.address = e.target.value.trim();
+    clearTimeout(addressTimer);
+    // If a procedure is already picked, debounce-reload slots
+    if (state.procedure && state.address.length > 8) {
+      addressTimer = setTimeout(loadSlots, 600);
+    }
+  });
+
+  // ─── Procedure pick ─────────────────────────────────────
+  $procedures.addEventListener("click", e => {
+    const card = e.target.closest(".proc-card");
+    if (!card) return;
+    document.querySelectorAll(".proc-card").forEach(c => c.classList.remove("selected"));
+    card.classList.add("selected");
+    state.procedure = card.dataset.procedure;
+    state.procedureLabel = card.querySelector(".pname").textContent;
+    state.slot = null;
+    updateSubmitButton();
+    if (state.address.length > 8) loadSlots();
+  });
+
+  // ─── Load available slots ───────────────────────────────
+  async function loadSlots() {
+    $slotsSection.classList.remove("hidden");
+    $slotsContainer.innerHTML = '<p class="slots-status">Calculating availability for your address…</p>';
+
+    try {
+      const r = await fetch("/api/slots", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client_address: state.address,
+          procedure_type: state.procedure,
+          days_ahead: 7,
+        }),
+      });
+      if (!r.ok) {
+        const err = await r.text();
+        $slotsContainer.innerHTML = `<p class="slots-status">We couldn't load times right now. (${err})</p>`;
+        return;
+      }
+      const slots = await r.json();
+      renderSlots(slots);
+    } catch (err) {
+      $slotsContainer.innerHTML = `<p class="slots-status">Network error. ${err.message}</p>`;
+    }
+  }
+
+  // ─── Render slots, grouped by day ───────────────────────
+  function renderSlots(slots) {
+    if (!slots.length) {
+      $slotsContainer.innerHTML = '<p class="slots-status">No availability in the next 7 days. Please call us to arrange.</p>';
+      return;
+    }
+
+    // Group by day
+    const byDay = {};
+    slots.forEach(s => {
+      const d = new Date(s.start_time);
+      const key = d.toDateString();
+      if (!byDay[key]) byDay[key] = [];
+      byDay[key].push(s);
+    });
+
+    let html = "";
+    for (const dayKey of Object.keys(byDay)) {
+      const d = new Date(dayKey);
+      const dayName = d.toLocaleDateString("en-US", { weekday: "long" });
+      const dayDate = d.toLocaleDateString("en-US", { month: "long", day: "numeric" });
+      html += `<div class="day-group">`;
+      html += `<div class="day-label">${dayName}</div>`;
+      html += `<div class="day-date">${dayDate}</div>`;
+      html += `<div class="slot-grid">`;
+      byDay[dayKey].forEach(s => {
+        const t = new Date(s.start_time);
+        const timeStr = t.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+        html += `
+          <button class="slot-chip"
+                  data-start="${s.start_time}"
+                  data-injector-id="${s.injector_id}"
+                  data-injector-name="${escapeHtml(s.injector_name)}"
+                  data-travel="${s.travel_minutes}">
+            <div class="slot-time">${timeStr}</div>
+            <div class="slot-injector">with ${escapeHtml(s.injector_name)}</div>
+          </button>`;
+      });
+      html += `</div></div>`;
+    }
+    $slotsContainer.innerHTML = html;
+
+    // Hook up clicks
+    $slotsContainer.querySelectorAll(".slot-chip").forEach(chip => {
+      chip.addEventListener("click", () => {
+        $slotsContainer.querySelectorAll(".slot-chip").forEach(c => c.classList.remove("selected"));
+        chip.classList.add("selected");
+        state.slot = {
+          start_time: chip.dataset.start,
+          injector_id: chip.dataset.injectorId,
+          injector_name: chip.dataset.injectorName,
+          travel_minutes: parseInt(chip.dataset.travel, 10),
+        };
+        $contactSection.classList.remove("hidden");
+        updateSubmitButton();
+        // Smooth scroll to contact section
+        setTimeout(() => $contactSection.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+      });
+    });
+  }
+
+  // ─── Contact form validation ────────────────────────────
+  [$name, $email, $phone].forEach(el => el.addEventListener("input", updateSubmitButton));
+
+  function updateSubmitButton() {
+    const ok = state.address && state.procedure && state.slot &&
+               $name.value.trim() && $email.value.trim() && $phone.value.trim();
+    $submitBtn.disabled = !ok;
+  }
+
+  // ─── Submit booking ─────────────────────────────────────
+  $submitBtn.addEventListener("click", async () => {
+    $submitBtn.disabled = true;
+    $submitBtn.textContent = "Sending…";
+    try {
+      const r = await fetch("/api/book", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client_name: $name.value.trim(),
+          client_email: $email.value.trim(),
+          client_phone: $phone.value.trim(),
+          client_address: state.address,
+          procedure_type: state.procedure,
+          injector_id: state.slot.injector_id,
+          start_time: state.slot.start_time,
+        }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      showConfirmation();
+    } catch (err) {
+      alert("Sorry, something went wrong: " + err.message);
+      $submitBtn.disabled = false;
+      $submitBtn.textContent = "Request Appointment";
+    }
+  });
+
+  function showConfirmation() {
+    document.querySelectorAll("section").forEach(s => s.classList.add("hidden"));
+    const d = new Date(state.slot.start_time);
+    document.getElementById("confirm-details").innerHTML = `
+      <div class="confirm-detail-row"><span class="key">Procedure</span><span>${escapeHtml(state.procedureLabel)}</span></div>
+      <div class="confirm-detail-row"><span class="key">With</span><span>${escapeHtml(state.slot.injector_name)}</span></div>
+      <div class="confirm-detail-row"><span class="key">When</span><span>${d.toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span></div>
+      <div class="confirm-detail-row"><span class="key">Where</span><span>${escapeHtml(state.address)}</span></div>
+    `;
+    document.getElementById("confirmation").classList.remove("hidden");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, m => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[m]));
+  }
+</script>
+</body>
+</html>
