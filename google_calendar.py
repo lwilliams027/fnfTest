@@ -1,51 +1,62 @@
 """
-Google Calendar integration.
+Google Calendar integration via OAuth (per-injector).
 
-Uses a service account to read events from each injector's calendar. This
-means appointments live in Google Calendar — Podium isn't required.
+Each injector authorizes the app once via the OAuth flow. Their refresh
+token is stored on the Injector record. The server uses that token to
+read their calendar on demand.
 
-Setup:
-  1. In your Google Cloud project, enable the Google Calendar API.
-  2. Create a service account, generate a JSON key, download it.
-  3. Set GOOGLE_SERVICE_ACCOUNT_JSON env var to the JSON contents.
-  4. Each injector shares their Google Calendar with the service account's
-     email (with "See all event details" permission).
-  5. Register each injector with their google_calendar_id.
-
-Event format expectations (what your injectors should put in their calendar):
-  - Title: include the procedure name. e.g. "Botox - Sarah Johnson"
-  - Location: full client home address. e.g. "8000 Towers Crescent Dr, Vienna VA"
-  - Start/End: actual appointment times
+Compared to service accounts:
+  - More secure: each user grants explicit consent
+  - No org policies to fight
+  - Revocable per-user
+  - Works on any Google account (personal or Workspace)
 """
 
-import json
 from datetime import datetime, timezone
-from typing import Optional, Union
+from typing import Optional
 
-from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 
 
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
+AUTH_URI = "https://accounts.google.com/o/oauth2/auth"
+TOKEN_URI = "https://oauth2.googleapis.com/token"
+
+
+def make_oauth_flow(client_id: str, client_secret: str, redirect_uri: str) -> Flow:
+    """Build a Google OAuth flow object for the authorization journey."""
+    return Flow.from_client_config(
+        {
+            "web": {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "auth_uri": AUTH_URI,
+                "token_uri": TOKEN_URI,
+                "redirect_uris": [redirect_uri],
+            }
+        },
+        scopes=SCOPES,
+        redirect_uri=redirect_uri,
+    )
 
 
 class GoogleCalendarClient:
-    """Reads events from any calendar shared with the service account."""
+    """Per-user OAuth-authenticated Calendar client."""
 
-    def __init__(self, service_account_json: Union[str, dict]):
-        info = (
-            json.loads(service_account_json)
-            if isinstance(service_account_json, str)
-            else service_account_json
-        )
-        creds = service_account.Credentials.from_service_account_info(
-            info, scopes=SCOPES,
+    def __init__(self, client_id: str, client_secret: str, refresh_token: str):
+        creds = Credentials(
+            token=None,
+            refresh_token=refresh_token,
+            token_uri=TOKEN_URI,
+            client_id=client_id,
+            client_secret=client_secret,
+            scopes=SCOPES,
         )
         self.service = build(
             "calendar", "v3", credentials=creds, cache_discovery=False,
         )
-        # Surface the service account's email so we can show it to users
-        self.service_account_email = info.get("client_email", "unknown")
 
     def list_events(
         self,
@@ -55,7 +66,6 @@ class GoogleCalendarClient:
         max_results: int = 250,
     ) -> list[dict]:
         """Returns a flat list of events between time_min and time_max."""
-        # Google requires RFC3339 timestamps with timezone
         if time_min.tzinfo is None:
             time_min = time_min.replace(tzinfo=timezone.utc)
         if time_max.tzinfo is None:
@@ -65,17 +75,23 @@ class GoogleCalendarClient:
             calendarId=calendar_id,
             timeMin=time_min.isoformat(),
             timeMax=time_max.isoformat(),
-            singleEvents=True,           # expand recurring events
+            singleEvents=True,
             orderBy="startTime",
             maxResults=max_results,
         ).execute()
         return result.get("items", [])
 
+    def get_user_info(self) -> dict:
+        """Get the authenticated user's basic info (email)."""
+        # We didn't request the userinfo scope, so just return primary calendar
+        result = self.service.calendars().get(calendarId="primary").execute()
+        return {"primary_calendar_id": result.get("id")}
+
 
 # ─── Event parsing helpers ──────────────────────────────────────
 
 # Each procedure has a list of keywords we look for in the event title.
-# Order matters — more specific phrases should appear first.
+# Order matters — more specific phrases first.
 PROCEDURE_KEYWORDS: list[tuple[str, list[str]]] = [
     ("lip_filler",     ["lip filler", "lip-filler", "lip enhancement", "lips"]),
     ("cheek_filler",   ["cheek filler", "cheek-filler", "midface", "cheek"]),
@@ -92,17 +108,14 @@ def parse_procedure_from_title(title: str) -> str:
         for kw in keywords:
             if kw in lower:
                 return proc_key
-    return "consultation"  # default fallback
+    return "consultation"
 
 
 def parse_event_address(event: dict) -> Optional[str]:
     """Extract the client's service address from an event."""
-    # Primary: the event's Location field
     location = (event.get("location") or "").strip()
     if location:
         return location
-
-    # Fallback: pull from description if labeled
     description = event.get("description") or ""
     for line in description.split("\n"):
         for marker in ("address:", "location:", "client address:", "client:"):
@@ -116,6 +129,5 @@ def parse_event_datetime(dt_dict: dict) -> datetime:
     if "dateTime" in dt_dict:
         return datetime.fromisoformat(dt_dict["dateTime"].replace("Z", "+00:00"))
     if "date" in dt_dict:
-        # All-day event — start at midnight UTC
         return datetime.fromisoformat(dt_dict["date"] + "T00:00:00+00:00")
     raise ValueError(f"Cannot parse datetime from {dt_dict}")

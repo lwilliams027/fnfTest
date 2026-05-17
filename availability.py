@@ -31,8 +31,10 @@ class Injector:
     home_base_lng: Optional[float] = None
     # Working hours per weekday (0=Mon, 6=Sun) as (start_hour, end_hour) in 24h
     working_hours: Optional[dict[int, tuple[int, int]]] = None
-    # Google Calendar ID this injector's appointments live in
+    # Google Calendar ID this injector's appointments live in (default "primary")
     google_calendar_id: Optional[str] = None
+    # OAuth refresh token, populated after the injector authorizes
+    google_refresh_token: Optional[str] = None
 
 
 @dataclass

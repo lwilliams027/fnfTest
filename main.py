@@ -39,16 +39,18 @@ from availability import (
 from google_maps import GoogleMapsClient
 from podium_client import PodiumClient
 
-# Google Calendar is optional — only loads if env var is set
+# Google Calendar via OAuth (per-injector). Optional — only loads if libs installed.
 try:
     from google_calendar import (
         GoogleCalendarClient,
+        make_oauth_flow,
         parse_event_address,
         parse_event_datetime,
         parse_procedure_from_title,
     )
+    GOOGLE_CALENDAR_AVAILABLE = True
 except ImportError:
-    GoogleCalendarClient = None  # type: ignore
+    GOOGLE_CALENDAR_AVAILABLE = False
 
 
 # ─── Procedure catalog ──────────────────────────────────────────
@@ -74,16 +76,18 @@ BOOKINGS: dict[str, dict] = {}  # customer booking requests, pending dispatcher 
 
 gmaps = GoogleMapsClient(api_key=os.environ.get("GOOGLE_MAPS_API_KEY", ""))
 
-# Google Calendar (optional). Set GOOGLE_SERVICE_ACCOUNT_JSON env var to the
-# full JSON contents of a service account key.
-gcal: "GoogleCalendarClient | None" = None
-_gcal_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
-if _gcal_json and GoogleCalendarClient is not None:
-    try:
-        gcal = GoogleCalendarClient(_gcal_json)
-        print(f"✓ Google Calendar ready (service account: {gcal.service_account_email})")
-    except Exception as e:
-        print(f"⚠️  Google Calendar init failed: {e}")
+# Google Calendar OAuth config (per-injector)
+GOOGLE_OAUTH_CLIENT_ID = os.environ.get("GOOGLE_OAUTH_CLIENT_ID", "")
+GOOGLE_OAUTH_CLIENT_SECRET = os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET", "")
+# Public URL where injectors will be redirected after authorizing — must match
+# the redirect URI configured on the Google OAuth Client ID.
+GOOGLE_OAUTH_REDIRECT_URI = (
+    os.environ.get("GOOGLE_OAUTH_REDIRECT_URI")
+    or (os.environ.get("PODIUM_REDIRECT_URI", "") + "/oauth/google/callback")
+)
+
+# Tracks OAuth state values mapped to injector IDs (CSRF protection + identifies caller)
+_google_oauth_states: dict[str, str] = {}
 
 
 def _podium() -> PodiumClient:
@@ -386,15 +390,81 @@ def _normalize_procedure(name: str) -> str:
     return key if key in PROCEDURES else "consultation"
 
 
-# ─── Google Calendar sync ──────────────────────────────────────
+# ─── Google Calendar OAuth (per-injector) ──────────────────────
 
-@app.get("/google/service-account")
-def google_service_account_info():
-    """Returns the service account email — give this to your injectors so they
-    can share their calendars with it."""
-    if gcal is None:
-        raise HTTPException(500, "Google Calendar not configured")
-    return {"service_account_email": gcal.service_account_email}
+@app.get("/oauth/google/start")
+def google_oauth_start(injector_id: str):
+    """
+    Each injector visits this URL once to authorize calendar access.
+    Pass ?injector_id=their_id to associate the resulting token correctly.
+    """
+    if not GOOGLE_CALENDAR_AVAILABLE:
+        raise HTTPException(500, "Google Calendar libraries not installed")
+    if not GOOGLE_OAUTH_CLIENT_ID:
+        raise HTTPException(500, "GOOGLE_OAUTH_CLIENT_ID env var not set")
+    if injector_id not in INJECTORS:
+        raise HTTPException(404, f"Injector '{injector_id}' is not registered. Register first via POST /injectors.")
+
+    flow = make_oauth_flow(
+        GOOGLE_OAUTH_CLIENT_ID,
+        GOOGLE_OAUTH_CLIENT_SECRET,
+        GOOGLE_OAUTH_REDIRECT_URI,
+    )
+    auth_url, state = flow.authorization_url(
+        access_type="offline",   # required for a refresh token
+        prompt="consent",        # force refresh token even on re-auth
+        include_granted_scopes="true",
+    )
+    _google_oauth_states[state] = injector_id
+    return RedirectResponse(auth_url)
+
+
+@app.get("/oauth/google/callback", response_class=HTMLResponse)
+def google_oauth_callback(request: Request):
+    """Google redirects here after the injector approves."""
+    code = request.query_params.get("code")
+    state = request.query_params.get("state")
+    if not code:
+        return HTMLResponse("<h1>Missing authorization code</h1>", status_code=400)
+    injector_id = _google_oauth_states.pop(state or "", None)
+    if not injector_id:
+        return HTMLResponse("<h1>Invalid state (CSRF check failed)</h1>", status_code=400)
+    injector = INJECTORS.get(injector_id)
+    if not injector:
+        return HTMLResponse(f"<h1>Injector '{injector_id}' no longer exists</h1>", status_code=400)
+
+    flow = make_oauth_flow(
+        GOOGLE_OAUTH_CLIENT_ID,
+        GOOGLE_OAUTH_CLIENT_SECRET,
+        GOOGLE_OAUTH_REDIRECT_URI,
+    )
+    try:
+        flow.fetch_token(code=code)
+    except Exception as e:
+        return HTMLResponse(f"<h1>Token exchange failed</h1><pre>{e}</pre>", status_code=400)
+
+    creds = flow.credentials
+    if not creds.refresh_token:
+        return HTMLResponse(
+            "<h1>No refresh token received</h1>"
+            "<p>You may have already authorized this app. To re-authorize, "
+            "visit <a href='https://myaccount.google.com/permissions'>"
+            "your Google account permissions</a>, remove this app's access, "
+            "then retry the link.</p>",
+            status_code=400,
+        )
+
+    injector.google_refresh_token = creds.refresh_token
+    if not injector.google_calendar_id:
+        injector.google_calendar_id = "primary"
+
+    return HTMLResponse(f"""
+    <html><body style="font-family: system-ui; max-width: 600px; margin: 40px auto;">
+      <h1>✅ {injector.name} is connected</h1>
+      <p>Google Calendar access authorized. You can close this window.</p>
+      <p>The dispatcher can now see your appointments in the scheduling system.</p>
+    </body></html>
+    """)
 
 
 @app.post("/sync/google")
@@ -402,15 +472,17 @@ def sync_from_google_calendar(lookahead_days: int = 14):
     """
     Pull appointments from each registered injector's Google Calendar.
 
-    Each injector must:
-      1. Have a google_calendar_id set
-      2. Have shared their calendar with the service account
-         (see GET /google/service-account for the email)
-      3. Format events with the procedure name in the title and the
+    Each injector must have:
+      1. Completed the /oauth/google/start flow (so they have a refresh token)
+      2. (Optional) google_calendar_id set to a specific calendar, otherwise
+         defaults to their primary calendar
+      3. Events formatted with the procedure name in the title and the
          client address in the Location field
     """
-    if gcal is None:
-        raise HTTPException(500, "Google Calendar not configured. Set GOOGLE_SERVICE_ACCOUNT_JSON env var.")
+    if not GOOGLE_CALENDAR_AVAILABLE:
+        raise HTTPException(500, "Google Calendar libraries not installed")
+    if not GOOGLE_OAUTH_CLIENT_ID:
+        raise HTTPException(500, "GOOGLE_OAUTH_CLIENT_ID env var not set")
 
     range_start = datetime.now(timezone.utc)
     range_end = range_start + timedelta(days=lookahead_days)
@@ -420,11 +492,17 @@ def sync_from_google_calendar(lookahead_days: int = 14):
     errors: list[str] = []
 
     for injector in INJECTORS.values():
-        if not injector.google_calendar_id:
+        if not injector.google_refresh_token:
             continue
 
         try:
-            events = gcal.list_events(injector.google_calendar_id, range_start, range_end)
+            client = GoogleCalendarClient(
+                GOOGLE_OAUTH_CLIENT_ID,
+                GOOGLE_OAUTH_CLIENT_SECRET,
+                injector.google_refresh_token,
+            )
+            calendar_id = injector.google_calendar_id or "primary"
+            events = client.list_events(calendar_id, range_start, range_end)
         except Exception as e:
             errors.append(f"{injector.name}: calendar list failed — {e}")
             continue
@@ -433,8 +511,6 @@ def sync_from_google_calendar(lookahead_days: int = 14):
             event_id = event.get("id")
             if not event_id:
                 continue
-
-            # Cancelled events get removed from our store
             if event.get("status") == "cancelled":
                 APPOINTMENTS.pop(event_id, None)
                 continue
@@ -464,7 +540,7 @@ def sync_from_google_calendar(lookahead_days: int = 14):
                 service_address=address,
                 service_lat=lat,
                 service_lng=lng,
-                start=start.replace(tzinfo=None),  # naive for downstream simplicity
+                start=start.replace(tzinfo=None),
                 end=end.replace(tzinfo=None),
             )
             synced += 1
@@ -474,6 +550,9 @@ def sync_from_google_calendar(lookahead_days: int = 14):
         "synced": synced,
         "skipped_no_address": skipped_no_address,
         "errors": errors,
+        "authorized_injectors": [
+            inj.id for inj in INJECTORS.values() if inj.google_refresh_token
+        ],
     }
 
 
