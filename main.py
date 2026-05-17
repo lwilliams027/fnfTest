@@ -15,7 +15,7 @@ Run locally:
 
 import os
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 import requests
@@ -38,6 +38,17 @@ from availability import (
 )
 from google_maps import GoogleMapsClient
 from podium_client import PodiumClient
+
+# Google Calendar is optional — only loads if env var is set
+try:
+    from google_calendar import (
+        GoogleCalendarClient,
+        parse_event_address,
+        parse_event_datetime,
+        parse_procedure_from_title,
+    )
+except ImportError:
+    GoogleCalendarClient = None  # type: ignore
 
 
 # ─── Procedure catalog ──────────────────────────────────────────
@@ -62,6 +73,17 @@ BOOKINGS: dict[str, dict] = {}  # customer booking requests, pending dispatcher 
 # ─── External clients ───────────────────────────────────────────
 
 gmaps = GoogleMapsClient(api_key=os.environ.get("GOOGLE_MAPS_API_KEY", ""))
+
+# Google Calendar (optional). Set GOOGLE_SERVICE_ACCOUNT_JSON env var to the
+# full JSON contents of a service account key.
+gcal: "GoogleCalendarClient | None" = None
+_gcal_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+if _gcal_json and GoogleCalendarClient is not None:
+    try:
+        gcal = GoogleCalendarClient(_gcal_json)
+        print(f"✓ Google Calendar ready (service account: {gcal.service_account_email})")
+    except Exception as e:
+        print(f"⚠️  Google Calendar init failed: {e}")
 
 
 def _podium() -> PodiumClient:
@@ -95,6 +117,7 @@ class RegisterInjectorRequest(BaseModel):
     name: str
     home_base_address: str | None = None
     working_hours: dict[int, tuple[int, int]] | None = None  # weekday → (start_h, end_h)
+    google_calendar_id: str | None = None  # for Google Calendar sync
 
 
 # ─── App ────────────────────────────────────────────────────────
@@ -153,6 +176,7 @@ def register_injector(req: RegisterInjectorRequest):
         home_base_lat=lat,
         home_base_lng=lng,
         working_hours=req.working_hours,
+        google_calendar_id=req.google_calendar_id,
     )
     return {"ok": True, "injector_id": req.id}
 
@@ -360,6 +384,97 @@ def _normalize_procedure(name: str) -> str:
     """Map Podium's typeName to our internal procedure key."""
     key = name.lower().strip().replace(" ", "_").replace("-", "_")
     return key if key in PROCEDURES else "consultation"
+
+
+# ─── Google Calendar sync ──────────────────────────────────────
+
+@app.get("/google/service-account")
+def google_service_account_info():
+    """Returns the service account email — give this to your injectors so they
+    can share their calendars with it."""
+    if gcal is None:
+        raise HTTPException(500, "Google Calendar not configured")
+    return {"service_account_email": gcal.service_account_email}
+
+
+@app.post("/sync/google")
+def sync_from_google_calendar(lookahead_days: int = 14):
+    """
+    Pull appointments from each registered injector's Google Calendar.
+
+    Each injector must:
+      1. Have a google_calendar_id set
+      2. Have shared their calendar with the service account
+         (see GET /google/service-account for the email)
+      3. Format events with the procedure name in the title and the
+         client address in the Location field
+    """
+    if gcal is None:
+        raise HTTPException(500, "Google Calendar not configured. Set GOOGLE_SERVICE_ACCOUNT_JSON env var.")
+
+    range_start = datetime.now(timezone.utc)
+    range_end = range_start + timedelta(days=lookahead_days)
+
+    synced = 0
+    skipped_no_address = 0
+    errors: list[str] = []
+
+    for injector in INJECTORS.values():
+        if not injector.google_calendar_id:
+            continue
+
+        try:
+            events = gcal.list_events(injector.google_calendar_id, range_start, range_end)
+        except Exception as e:
+            errors.append(f"{injector.name}: calendar list failed — {e}")
+            continue
+
+        for event in events:
+            event_id = event.get("id")
+            if not event_id:
+                continue
+
+            # Cancelled events get removed from our store
+            if event.get("status") == "cancelled":
+                APPOINTMENTS.pop(event_id, None)
+                continue
+
+            address = parse_event_address(event)
+            if not address:
+                skipped_no_address += 1
+                continue
+
+            try:
+                lat, lng = gmaps.geocode(address)
+            except Exception as e:
+                errors.append(f"Geocode failed for '{address}': {e}")
+                continue
+
+            try:
+                start = parse_event_datetime(event["start"])
+                end = parse_event_datetime(event["end"])
+            except Exception as e:
+                errors.append(f"Event '{event.get('summary', event_id)}' datetime parse failed: {e}")
+                continue
+
+            APPOINTMENTS[event_id] = Appointment(
+                id=event_id,
+                injector_id=injector.id,
+                procedure_type=parse_procedure_from_title(event.get("summary", "")),
+                service_address=address,
+                service_lat=lat,
+                service_lng=lng,
+                start=start.replace(tzinfo=None),  # naive for downstream simplicity
+                end=end.replace(tzinfo=None),
+            )
+            synced += 1
+
+    return {
+        "ok": True,
+        "synced": synced,
+        "skipped_no_address": skipped_no_address,
+        "errors": errors,
+    }
 
 
 # ─── Customer-facing booking flow ───────────────────────────────

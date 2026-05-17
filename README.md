@@ -109,5 +109,3 @@ Podium's Appointments API is a beta product. If your account has beta access, hi
 ## Troubleshooting
 
 See the Troubleshooting section at the bottom of `FULL_SETUP.md`.
-"# fnfTest" 
-"# fnfTest" 
