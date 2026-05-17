@@ -86,8 +86,9 @@ GOOGLE_OAUTH_REDIRECT_URI = (
     or (os.environ.get("PODIUM_REDIRECT_URI", "") + "/oauth/google/callback")
 )
 
-# Tracks OAuth state values mapped to injector IDs (CSRF protection + identifies caller)
-_google_oauth_states: dict[str, str] = {}
+# Tracks OAuth state values mapped to (injector_id, code_verifier) — code_verifier
+# is part of PKCE and must round-trip between authorize and token exchange.
+_google_oauth_states: dict[str, tuple[str, str]] = {}
 
 
 def _podium() -> PodiumClient:
@@ -415,7 +416,8 @@ def google_oauth_start(injector_id: str):
         prompt="consent",        # force refresh token even on re-auth
         include_granted_scopes="true",
     )
-    _google_oauth_states[state] = injector_id
+    # PKCE: stash the code_verifier so the callback can include it
+    _google_oauth_states[state] = (injector_id, flow.code_verifier)
     return RedirectResponse(auth_url)
 
 
@@ -426,9 +428,10 @@ def google_oauth_callback(request: Request):
     state = request.query_params.get("state")
     if not code:
         return HTMLResponse("<h1>Missing authorization code</h1>", status_code=400)
-    injector_id = _google_oauth_states.pop(state or "", None)
-    if not injector_id:
+    stored = _google_oauth_states.pop(state or "", None)
+    if not stored:
         return HTMLResponse("<h1>Invalid state (CSRF check failed)</h1>", status_code=400)
+    injector_id, code_verifier = stored
     injector = INJECTORS.get(injector_id)
     if not injector:
         return HTMLResponse(f"<h1>Injector '{injector_id}' no longer exists</h1>", status_code=400)
@@ -438,6 +441,8 @@ def google_oauth_callback(request: Request):
         GOOGLE_OAUTH_CLIENT_SECRET,
         GOOGLE_OAUTH_REDIRECT_URI,
     )
+    # PKCE: restore the verifier from the original /start request
+    flow.code_verifier = code_verifier
     try:
         flow.fetch_token(code=code)
     except Exception as e:
